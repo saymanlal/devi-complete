@@ -1,0 +1,7 @@
+com.devi.app-pngs-0 /home/krushn/devi-complete/android/app/build/generated/res/pngs/debug
+com.devi.app-resValues-1 /home/krushn/devi-complete/android/app/build/generated/res/resValues/debug
+com.devi.app-packageDebugResources-2 /home/krushn/devi-complete/android/app/build/intermediates/incremental/debug/packageDebugResources/merged.dir
+com.devi.app-packageDebugResources-3 /home/krushn/devi-complete/android/app/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
+com.devi.app-merged_res-4 /home/krushn/devi-complete/android/app/build/intermediates/merged_res/debug
+com.devi.app-debug-5 /home/krushn/devi-complete/android/app/src/debug/res
+com.devi.app-main-6 /home/krushn/devi-complete/android/app/src/main/res

@@ -1,0 +1,16 @@
+R_DEF: Internal format may change without notice
+local
+drawable gradient_background
+drawable ic_call
+drawable ic_cloud
+drawable ic_devi_logo
+drawable ic_language
+drawable ic_record
+drawable ic_restart
+drawable ic_status_dot
+drawable ic_whatsapp
+id status
+id toggle
+layout main
+string app_name
+style AppTheme

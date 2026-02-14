@@ -20,7 +20,7 @@ public class MonitorService extends Service {
     public void onCreate() {
         super.onCreate();
         
-        if (Build.VERSION.SDK_INT >= 26) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                 CHANNEL, "DEVI Service", NotificationManager.IMPORTANCE_LOW
             );

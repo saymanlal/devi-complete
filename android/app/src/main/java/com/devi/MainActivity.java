@@ -37,7 +37,6 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Auto-start on first launch
         if (!prefs.contains("first")) {
             prefs.edit().putBoolean("first", true).apply();
             start();
@@ -47,7 +46,7 @@ public class MainActivity extends Activity {
     private void start() {
         prefs.edit().putBoolean("enabled", true).apply();
         Intent intent = new Intent(this, MonitorService.class);
-        if (Build.VERSION.SDK_INT >= 26) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent);
         } else {
             startService(intent);
