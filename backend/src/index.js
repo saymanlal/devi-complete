@@ -18,16 +18,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-/* ── Routes — paths must match URLs set in twilioService.js exactly ── */
-
-// Android app → POST /webhook/missed-call
-app.use('/webhook/missed-call', missedCallRouter);
-
-// Twilio voice + status callback → /webhook/twilio-voice
-app.use('/webhook/twilio-voice', twilioVoiceRouter);
-
-// Twilio recording callback → /webhook/recording/complete
-app.use('/webhook/recording', recordingsRouter);
+/* ── Routes ── */
+app.use('/webhook/missed-call',   missedCallRouter);
+app.use('/webhook/twilio-voice',  twilioVoiceRouter);
+app.use('/webhook/recording',     recordingsRouter);
 
 /* ── 404 fallback ── */
 app.use((req, res) => {
@@ -36,6 +30,6 @@ app.use((req, res) => {
 
 /* ── Start ── */
 app.listen(PORT, async () => {
-  console.log(`DEVI backend running on port ${PORT}`);
+  console.log('DEVI backend running on port ' + PORT);
   await initDatabase();
 });
