@@ -7,8 +7,8 @@ import { updateCall } from '../db/supabase.js';
 const router = express.Router();
 const { VoiceResponse } = twilio.twiml;
 
-// Alice - Twilio's multilingual voice (good Hindi support)
-const VOICE = 'alice';
+// AWS Polly Aditi Neural - BEST Hindi pronunciation
+const VOICE = 'Polly.Aditi-Neural';
 const LANGUAGE = 'hi-IN';
 const conversationState = new Map();
 
@@ -32,7 +32,7 @@ function sayAndHangup(response, text) {
 router.post('/', async (req, res) => {
   const { CallSid, SpeechResult, RecordingUrl, From, CallStatus, CallDuration } = req.body;
   
-  console.log('=== VOICE [alice] ===', { CallSid, CallStatus, SpeechResult: !!SpeechResult });
+  console.log('=== VOICE [Aditi-Neural] ===', { CallSid, CallStatus, SpeechResult: !!SpeechResult });
   
   const ACTION = `${process.env.BASE_URL}/webhook/twilio-voice`;
   const response = new VoiceResponse();
