@@ -1,57 +1,50 @@
-import { transcribeAudio, getCallSummary, clearCallMemory } from './groqService.js';
 import { sendSMS, buildSmsBody } from './smsService.js';
 import { updateCall } from '../db/supabase.js';
+import { clearCallMemory } from './groqService.js';
 
 export async function processRecording(callSid, recordingUrl, callerNumber, voiceMessageUrl = null) {
   try {
-    console.log('Processing recording for ' + callSid);
-
-    const urlToTranscribe = voiceMessageUrl || recordingUrl;
-    const transcript = await transcribeAudio(urlToTranscribe);
-
-    const summary = getCallSummary(callSid);
-    const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-
-    // Update DB
+    console.log(`Processing recording for ${callSid}`);
+    
+    // Use voice message if available, otherwise main recording
+    const finalUrl = voiceMessageUrl || recordingUrl;
+    
+    // Update database
     await updateCall(callSid, {
-      recording_url:     recordingUrl,
-      transcript:        transcript || null,
+      recording_url: recordingUrl,
       voice_message_url: voiceMessageUrl || null,
-      status:            transcript ? 'completed' : 'transcription_failed',
+      status: 'completed',
     }).catch(e => console.error('DB update error:', e.message));
 
-    // Ensure .mp3 extension on recording URL
-    const mp3Url = recordingUrl.endsWith('.mp3') ? recordingUrl : recordingUrl + '.mp3';
-
-    // Build SMS
+    // Build simple SMS - just caller number and recording link
     const smsBody = buildSmsBody({
       callerNumber,
-      intent:       summary?.intent    || 'general',
-      keyPoints:    summary?.keyPoints || [],
-      transcript:   transcript         || null,
-      recordingUrl: mp3Url,
-      duration:     summary?.duration  || null,
-      time:         now,
+      recordingUrl: finalUrl
     });
 
+    // Send SMS
     await sendSMS(smsBody);
-    console.log('SMS sent for call: ' + callSid);
-
+    console.log('SMS sent for call:', callSid);
+    
     clearCallMemory(callSid);
-
+    
   } catch (error) {
     console.error('Processing error:', error.message);
-
-    // Fallback — always send something
+    
+    // Fallback SMS
     try {
-      const fallbackUrl = recordingUrl.endsWith('.mp3') ? recordingUrl : recordingUrl + '.mp3';
+      const fallbackUrl = recordingUrl.endsWith('.mp3') ? recordingUrl : `${recordingUrl}.mp3`;
+      const fullFallbackUrl = fallbackUrl.includes('http') 
+        ? fallbackUrl 
+        : `https://api.twilio.com${fallbackUrl}`;
+      
       await sendSMS(
-        'DEVI: ' + callerNumber + ' | Recording: ' + fallbackUrl
+        `DEVI Missed Call\nFrom: ${callerNumber}\nRecording: ${fullFallbackUrl}`
       );
     } catch (smsErr) {
       console.error('Fallback SMS failed:', smsErr.message);
     }
-
+    
     await updateCall(callSid, { status: 'processing_failed' }).catch(() => {});
   }
 }
