@@ -1,4 +1,5 @@
 import express from 'express';
+import { getCallBySid, updateCall } from '../db/supabase.js';
 import twilio from 'twilio';
 import dotenv from 'dotenv';
 
@@ -12,44 +13,43 @@ const twilioClient = twilio(
 );
 
 router.post('/complete', async (req, res) => {
-  console.log('=== RECORDING WEBHOOK ===');
-  console.log(req.body);
-  
-  res.sendStatus(200);
-  
   try {
-    const { RecordingSid, CallSid } = req.body;
+    const { CallSid, RecordingSid } = req.body;
     
-    if (!RecordingSid) {
-      console.error('NO RecordingSid!');
+    res.sendStatus(200);
+    
+    const call = await getCallBySid(CallSid);
+    if (!call) {
+      console.error('Call not found for recording:', CallSid);
       return;
     }
     
-    console.log('Fetching recording:', RecordingSid);
-    
+    // ONLY CHANGE: Fetch recording to get PUBLIC URL
     const recording = await twilioClient.recordings(RecordingSid).fetch();
     const publicUrl = `https://api.twilio.com${recording.uri.replace('.json', '.mp3')}`;
     
-    console.log('Public URL:', publicUrl);
+    console.log('Public recording URL:', publicUrl);
     
-    const call = await twilioClient.calls(CallSid).fetch();
-    const callerNumber = call.from;
+    // Update database with public URL
+    await updateCall(CallSid, {
+      recording_url: publicUrl,
+      voice_message_url: call.voice_message_url || publicUrl,
+      status: 'completed'
+    }).catch(e => console.error('DB update error:', e.message));
     
-    console.log('Sending SMS to:', process.env.USER_PHONE_NUMBER);
-    
-    const message = await twilioClient.messages.create({
+    // Send SMS with public URL
+    await twilioClient.messages.create({
       body: `DEVI Missed Call
-From: ${callerNumber}
+From: ${call.caller_number}
 Recording: ${publicUrl}`,
       from: process.env.TWILIO_PHONE_NUMBER,
       to: process.env.USER_PHONE_NUMBER,
     });
     
-    console.log('SMS SENT!', message.sid);
+    console.log('SMS sent for call:', CallSid);
     
   } catch (error) {
-    console.error('RECORDING ERROR:', error.message);
-    console.error(error.stack);
+    console.error('Recording webhook error:', error);
   }
 });
 
