@@ -10,11 +10,13 @@ export const twilioClient = twilio(
 
 export async function initiateCallback(callerNumber) {
   try {
+    const BASE_URL = process.env.BASE_URL;
+    
     const call = await twilioClient.calls.create({
       from: process.env.TWILIO_PHONE_NUMBER,
       to: callerNumber,
-      url: `${process.env.BASE_URL}/webhook/twilio-voice`,
-      statusCallback: `${process.env.BASE_URL}/webhook/twilio-voice`,
+      url: `${BASE_URL}/webhook/twilio-voice`,
+      statusCallback: `${BASE_URL}/webhook/twilio-voice`,
       statusCallbackEvent: ['completed'],
       statusCallbackMethod: 'POST',
       timeout: 30,

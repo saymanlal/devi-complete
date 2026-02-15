@@ -1,35 +1,27 @@
 import express from 'express';
-import { twilioClient } from '../services/twilioService.js';
 import { getCallBySid, updateCall } from '../db/supabase.js';
+import { twilioClient } from '../services/twilioService.js';
 import { sendSMS } from '../services/smsService.js';
 
 const router = express.Router();
 
 router.post('/complete', async (req, res) => {
-  console.log('Recording complete:', req.body);
-  
-  // Respond immediately
-  res.sendStatus(200);
-  
   try {
-    const { CallSid, RecordingSid, RecordingUrl } = req.body;
+    const { CallSid, RecordingUrl, RecordingSid } = req.body;
     
-    if (!RecordingSid) {
-      console.error('No RecordingSid in webhook');
-      return;
-    }
+    // Respond immediately to Twilio
+    res.sendStatus(200);
     
-    // Get call details
     const call = await getCallBySid(CallSid);
     if (!call) {
-      console.error('Call not found:', CallSid);
+      console.error('Call not found for recording:', CallSid);
       return;
     }
     
-    // Fetch recording to get PUBLIC URL
+    // Fetch recording to get PUBLIC URL (no auth required)
     const recording = await twilioClient.recordings(RecordingSid).fetch();
     
-    // Build public URL - this works WITHOUT authentication
+    // Build public URL - .uri is publicly accessible without authentication
     const publicUrl = `https://api.twilio.com${recording.uri.replace('.json', '.mp3')}`;
     
     console.log('Public recording URL:', publicUrl);
@@ -38,18 +30,18 @@ router.post('/complete', async (req, res) => {
     await updateCall(CallSid, {
       recording_url: publicUrl,
       status: 'completed'
-    });
+    }).catch(e => console.error('DB update error:', e.message));
     
-    // Send SMS with public link
+    // Send simple SMS with caller number and public recording link
     const smsBody = `DEVI Missed Call
 From: ${call.caller_number}
 Recording: ${publicUrl}`;
     
     await sendSMS(smsBody);
-    console.log('SMS sent successfully');
+    console.log('SMS sent for call:', CallSid);
     
   } catch (error) {
-    console.error('Recording processing error:', error);
+    console.error('Recording webhook error:', error);
   }
 });
 

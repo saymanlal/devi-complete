@@ -1,32 +1,54 @@
 import express from 'express';
 import { initiateCallback } from '../services/twilioService.js';
 import { saveCall } from '../db/supabase.js';
+import { sanitizePhoneNumber, validatePhoneNumber } from '../utils/validators.js';
+import { log } from '../utils/logger.js';
 
 const router = express.Router();
+const recentCallbacks = new Map();
 
 router.post('/', async (req, res) => {
   try {
     const { caller, timestamp } = req.body;
     
-    if (!caller) {
-      return res.status(400).json({ error: 'Missing caller number' });
+    if (!caller || !validatePhoneNumber(caller)) {
+      return res.status(400).json({ error: 'Invalid phone number' });
     }
     
-    console.log('Missed call from:', caller);
+    const sanitizedCaller = sanitizePhoneNumber(caller);
     
-    const callSid = await initiateCallback(caller);
+    const lastCallback = recentCallbacks.get(sanitizedCaller);
+    const now = Date.now();
+    
+    if (lastCallback && (now - lastCallback) < 60000) {
+      return res.json({
+        success: true,
+        message: 'Callback already initiated recently'
+      });
+    }
+    
+    recentCallbacks.set(sanitizedCaller, now);
+    
+    log('info', 'Missed call received', { caller: sanitizedCaller });
+    
+    const callSid = await initiateCallback(sanitizedCaller);
     
     await saveCall({
-      caller_number: caller,
+      caller_number: sanitizedCaller,
       twilio_call_sid: callSid,
       missed_at: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
       callback_initiated_at: new Date().toISOString()
     });
     
-    res.json({ success: true, callSid });
+    res.json({
+      success: true,
+      callSid,
+      message: 'DEVI callback initiated'
+    });
+    
   } catch (error) {
-    console.error('Missed call error:', error);
-    res.status(500).json({ error: error.message });
+    log('error', 'Missed call webhook error', { error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

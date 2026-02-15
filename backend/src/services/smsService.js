@@ -11,10 +11,10 @@ export async function sendSMS(body) {
       to: process.env.USER_PHONE_NUMBER,
     });
     
-    console.log('SMS sent:', message.sid);
+    console.log('SMS sent:', message.sid, '| chars:', body.length);
     return message.sid;
   } catch (error) {
-    console.error('SMS error:', error);
+    console.error('SMS send error:', error.message);
     throw error;
   }
 }
