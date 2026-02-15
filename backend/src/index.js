@@ -7,29 +7,26 @@ import { initDatabase } from './db/supabase.js';
 
 dotenv.config();
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-/* ── Health — Android pings this to wake Render from sleep ── */
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-/* ── Routes ── */
-app.use('/webhook/missed-call',   missedCallRouter);
-app.use('/webhook/twilio-voice',  twilioVoiceRouter);
-app.use('/webhook/recording',     recordingsRouter);
+app.use('/webhook/missed-call', missedCallRouter);
+app.use('/webhook/twilio-voice', twilioVoiceRouter);
+app.use('/webhook/recording', recordingsRouter);
 
-/* ── 404 fallback ── */
 app.use((req, res) => {
+  console.log('404 - Not found:', req.path);
   res.status(404).json({ error: 'Not found', path: req.path });
 });
 
-/* ── Start ── */
 app.listen(PORT, async () => {
-  console.log('DEVI backend running on port ' + PORT);
+  console.log(`DEVI backend running on port ${PORT}`);
   await initDatabase();
 });

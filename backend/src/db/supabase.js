@@ -12,12 +12,12 @@ export async function initDatabase() {
   try {
     const { error } = await supabase.from('calls').select('id').limit(1);
     if (error && error.code === '42P01') {
-      console.log('Tables not found. Please create them in Supabase dashboard using the SQL in README.md');
+      console.log('Tables not found. Create them in Supabase dashboard.');
     } else {
-      console.log('Database connection verified');
+      console.log('Database connected');
     }
   } catch (err) {
-    console.error('Database init error:', err.message);
+    console.error('Database error:', err.message);
   }
 }
 
@@ -33,9 +33,9 @@ export async function saveCall(data) {
     }])
     .select()
     .single();
-
+  
   if (error) {
-    console.error('Error saving call:', error);
+    console.error('Save call error:', error);
     return null;
   }
   return result;
@@ -46,9 +46,9 @@ export async function updateCall(callSid, updates) {
     .from('calls')
     .update(updates)
     .eq('twilio_call_sid', callSid);
-
+  
   if (error) {
-    console.error('Error updating call:', error);
+    console.error('Update call error:', error);
   }
 }
 
@@ -58,9 +58,9 @@ export async function getCallBySid(callSid) {
     .select('*')
     .eq('twilio_call_sid', callSid)
     .single();
-
+  
   if (error) {
-    console.error('Error fetching call:', error);
+    console.error('Get call error:', error);
     return null;
   }
   return data;
