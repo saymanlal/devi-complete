@@ -1,167 +1,223 @@
 import express from 'express';
+import twilio from 'twilio';
 import {
-  generateVoiceResponse,
-  generateRecordingResponse,
-  generateHangupResponse
-} from '../services/twilioService.js';
-import { generateAIResponse, detectLanguageMix } from '../services/groqService.js';
+  generateAIResponse,
+  detectLanguageMix,
+  initCallMemory,
+  updateCallMemory,
+  getCallSummary,
+} from '../services/groqService.js';
+import { sendSMS, buildSmsBody, twilioClient } from '../services/smsService.js';
+import { processRecording } from '../services/transcriptionService.js';
 import {
   GREETING_TEXT,
   INITIAL_QUESTION,
   MESSAGE_PROMPT_MID,
-  CLOSING_PROMPT
+  CLOSING_PROMPT,
 } from '../config/prompts.js';
-import { updateCall } from '../db/supabase.js';
+import { saveCall, updateCall } from '../db/supabase.js';
 
 const router = express.Router();
+const { VoiceResponse } = twilio.twiml;
+
+// Voice = 'Polly.Kajal' — AWS Neural Hindi, best Indian accent on Twilio
+const VOICE    = 'Polly.Kajal';
+const LANGUAGE = 'hi-IN';
 
 const conversationState = new Map();
 
+// ── Helper: build TwiML with gather ─────────────────────────────────
+function sayAndGather(response, text, actionUrl) {
+  response.say({ voice: VOICE, language: LANGUAGE }, text);
+  response.gather({
+    input:         'speech',
+    language:      LANGUAGE,
+    speechTimeout: 'auto',
+    timeout:       10,
+    action:        actionUrl,
+    method:        'POST',
+  });
+}
+
+// ── Helper: hangup with final message ───────────────────────────────
+function sayAndHangup(response, text) {
+  response.say({ voice: VOICE, language: LANGUAGE }, text);
+  response.hangup();
+}
+
+// ── Main voice handler ───────────────────────────────────────────────
 router.post('/', async (req, res) => {
+  const {
+    CallSid,
+    SpeechResult,
+    RecordingUrl,
+    From,
+    CallStatus,
+    CallDuration,
+  } = req.body;
+
+  const ACTION = `${process.env.BASE_URL}/webhook/twilio-voice`;
+  const response = new VoiceResponse();
+
+  // ── Call completed status callback ──────────────────────────────
+  if (CallStatus === 'completed') {
+    await updateCall(CallSid, {
+      call_duration: parseInt(CallDuration) || 0,
+      status: 'call_completed',
+    }).catch(() => {});
+    conversationState.delete(CallSid);
+    return res.sendStatus(200);
+  }
+
+  // ── Init state ───────────────────────────────────────────────────
+  if (!conversationState.has(CallSid)) {
+    conversationState.set(CallSid, {
+      history:        [],
+      stage:          'greeting',
+      messageOffered: false,
+      languageStyle:  'hindi',
+      voiceMessageUrl: null,
+      callerNumber:   From || '',
+    });
+    initCallMemory(CallSid, From || '');
+  }
+
+  const state = conversationState.get(CallSid);
+
   try {
-    const callSid = req.body.CallSid;
-    const speechResult = req.body.SpeechResult;
-    const recordingUrl = req.body.RecordingUrl;
 
-    if (!conversationState.has(callSid)) {
-      conversationState.set(callSid, {
-        history: [],
-        stage: 'greeting',
-        messageOffered: false,
-        languageStyle: 'hindi',
-        voiceMessageUrl: null
-      });
-    }
-
-    const state = conversationState.get(callSid);
-
+    // ── GREETING (first contact) ──────────────────────────────────
     if (state.stage === 'greeting') {
       state.stage = 'conversation';
       const opening = `${GREETING_TEXT} ${INITIAL_QUESTION}`;
-      const twiml = generateVoiceResponse(opening, {
-        action: '/webhook/twilio-voice',
-        prompt: ''
-      });
-      return res.type('text/xml').send(twiml);
+      state.history.push({ role: 'assistant', content: opening });
+      sayAndGather(response, opening, ACTION);
+      return res.type('text/xml').send(response.toString());
     }
 
+    // ── RECORDING stage: recording URL has arrived ────────────────
+    if (state.stage === 'recording' && RecordingUrl) {
+      state.voiceMessageUrl = RecordingUrl + '.mp3';
+      await updateCall(CallSid, { voice_message_url: state.voiceMessageUrl }).catch(() => {});
+      sayAndHangup(
+        response,
+        'Aapka sandesh record ho gaya hai. Simon Sir jaise hi available honge, sun lenge. Dhanyawaad. Namaste.'
+      );
+      conversationState.delete(CallSid);
+      return res.type('text/xml').send(response.toString());
+    }
+
+    // ── AWAITING YES/NO for voice message ────────────────────────
     if (state.stage === 'awaiting_message_yn') {
-      if (speechResult) {
-        const lower = speechResult.toLowerCase();
-        const agreed = lower.includes('haan') || lower.includes('yes') ||
-          lower.includes('ha ') || lower.includes('zaroor') ||
-          lower.includes('bilkul') || lower.includes('okay') ||
-          lower.includes('thik') || lower.includes('sure');
+      if (SpeechResult) {
+        const lower = SpeechResult.toLowerCase();
+        const agreed =
+          /haan|yes|ha |zaroor|bilkul|okay|thik|sure|chhod|bolta|record|message/.test(lower);
 
         if (agreed) {
           state.stage = 'recording';
-          const twiml = generateRecordingResponse('/webhook/twilio-voice');
-          return res.type('text/xml').send(twiml);
+          response.say(
+            { voice: VOICE, language: LANGUAGE },
+            'Bilkul. Beep ke baad apna sandesh boliye. Jab khatam ho jaye toh line kaatiye.'
+          );
+          response.record({
+            maxLength:   120,
+            playBeep:    true,
+            action:      ACTION,
+            method:      'POST',
+            timeout:     5,
+            finishOnKey: '#',
+          });
+          return res.type('text/xml').send(response.toString());
         } else {
           state.stage = 'closing';
-          const twiml = generateVoiceResponse(CLOSING_PROMPT, {
-            action: '/webhook/twilio-voice',
-            prompt: ''
-          });
-          return res.type('text/xml').send(twiml);
+          sayAndGather(response, CLOSING_PROMPT, ACTION);
+          return res.type('text/xml').send(response.toString());
         }
       }
     }
 
+    // ── CLOSING stage ────────────────────────────────────────────
     if (state.stage === 'closing') {
-      if (speechResult) {
-        const lower = speechResult.toLowerCase();
-        const wantsMore = lower.includes('haan') || lower.includes('yes') ||
-          lower.includes('message') || lower.includes('chhod') || lower.includes('bolta');
+      if (SpeechResult) {
+        const lower = SpeechResult.toLowerCase();
+        const wantsMore =
+          /haan|yes|message|chhod|bolta|aur|kuch|batana/.test(lower);
+
         if (wantsMore) {
           state.stage = 'recording';
-          const twiml = generateRecordingResponse('/webhook/twilio-voice');
-          return res.type('text/xml').send(twiml);
+          response.say(
+            { voice: VOICE, language: LANGUAGE },
+            'Zaroor. Beep ke baad boliye.'
+          );
+          response.record({
+            maxLength:   120,
+            playBeep:    true,
+            action:      ACTION,
+            method:      'POST',
+            timeout:     5,
+            finishOnKey: '#',
+          });
+          return res.type('text/xml').send(response.toString());
         }
       }
-      const twiml = generateHangupResponse('Dhanyavaad. Sir ko aapka message pahuncha diya jayega. Namaste.');
-      conversationState.delete(callSid);
-      return res.type('text/xml').send(twiml);
+
+      sayAndHangup(
+        response,
+        'Theek hai. Aapka kaam main Simon Sir ko bata dungi. Dhanyawaad. Namaste.'
+      );
+      conversationState.delete(CallSid);
+      return res.type('text/xml').send(response.toString());
     }
 
-    if (state.stage === 'recording') {
-      if (recordingUrl) {
-        state.voiceMessageUrl = recordingUrl;
-        await updateCall(callSid, { voice_message_url: recordingUrl });
-        const twiml = generateHangupResponse(
-          'Aapka message record ho gaya hai. Sir jaldi hi aapko call karenge. Dhanyavaad. Namaste.'
-        );
-        conversationState.delete(callSid);
-        return res.type('text/xml').send(twiml);
-      }
-    }
-
-    if (speechResult) {
-      const langStyle = detectLanguageMix(speechResult);
+    // ── MAIN CONVERSATION ─────────────────────────────────────────
+    if (SpeechResult) {
+      const langStyle = detectLanguageMix(SpeechResult);
       state.languageStyle = langStyle;
 
-      state.history.push({ role: 'user', content: speechResult });
+      state.history.push({ role: 'user', content: SpeechResult });
+      updateCallMemory(CallSid, SpeechResult, '');
 
       const aiResponse = await generateAIResponse(state.history, langStyle);
       state.history.push({ role: 'assistant', content: aiResponse });
 
-      if (state.history.length >= 4 && !state.messageOffered) {
+      // After 3 user turns, offer voice message
+      const userTurns = state.history.filter(m => m.role === 'user').length;
+      if (userTurns >= 3 && !state.messageOffered) {
         state.messageOffered = true;
         state.stage = 'awaiting_message_yn';
-        const responseWithOffer = `${aiResponse} ${MESSAGE_PROMPT_MID}`;
-        const twiml = generateVoiceResponse(responseWithOffer, {
-          action: '/webhook/twilio-voice'
-        });
-        return res.type('text/xml').send(twiml);
+        const withOffer = `${aiResponse} ${MESSAGE_PROMPT_MID}`;
+        sayAndGather(response, withOffer, ACTION);
+        return res.type('text/xml').send(response.toString());
       }
 
-      const twiml = generateVoiceResponse(aiResponse, {
-        action: '/webhook/twilio-voice',
-        prompt: ''
-      });
-      return res.type('text/xml').send(twiml);
+      sayAndGather(response, aiResponse, ACTION);
+      return res.type('text/xml').send(response.toString());
     }
 
-    if (state.history.length === 0) {
-      const twiml = generateVoiceResponse('', {
-        action: '/webhook/twilio-voice',
-        prompt: INITIAL_QUESTION
-      });
-      return res.type('text/xml').send(twiml);
-    }
-
+    // ── No speech detected ───────────────────────────────────────
     if (!state.messageOffered) {
       state.messageOffered = true;
       state.stage = 'awaiting_message_yn';
-      const twiml = generateVoiceResponse(MESSAGE_PROMPT_MID, {
-        action: '/webhook/twilio-voice'
-      });
-      return res.type('text/xml').send(twiml);
+      sayAndGather(response, MESSAGE_PROMPT_MID, ACTION);
+      return res.type('text/xml').send(response.toString());
     }
 
-    const twiml = generateHangupResponse('Dhanyavaad aapke samay ke liye. Namaste.');
-    conversationState.delete(callSid);
-    res.type('text/xml').send(twiml);
+    sayAndHangup(
+      response,
+      'Koi baat nahi. Aapka kaam pahuncha diya jayega. Dhanyawaad. Namaste.'
+    );
+    conversationState.delete(CallSid);
+    return res.type('text/xml').send(response.toString());
 
   } catch (error) {
-    console.error('Voice webhook error:', error);
-    const twiml = generateHangupResponse(
-      'Kshama karein, mujhe abhi thodi technical samasya aa rahi hai. Kripya thodi der baad dobara call karein.'
+    console.error('Voice webhook error:', error.message);
+    sayAndHangup(
+      response,
+      'Kshama karein, thodi technical samasya aa gayi. Simon Sir jaldi aapko call karenge. Namaste.'
     );
-    res.type('text/xml').send(twiml);
+    return res.type('text/xml').send(response.toString());
   }
-});
-
-router.post('/status', async (req, res) => {
-  const { CallSid, CallStatus, CallDuration } = req.body;
-  if (CallStatus === 'completed') {
-    await updateCall(CallSid, {
-      call_duration: parseInt(CallDuration) || 0,
-      status: 'call_completed'
-    });
-    conversationState.delete(CallSid);
-  }
-  res.sendStatus(200);
 });
 
 export default router;

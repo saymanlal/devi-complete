@@ -1,6 +1,5 @@
-import { transcribeAudio } from './groqService.js';
-import { sendWhatsAppMessage, sendWhatsAppAudio } from './whatsappService.js';
-import { sendSMS } from './smsService.js';
+import { transcribeAudio, getCallSummary, clearCallMemory } from './groqService.js';
+import { sendSMS, buildSmsBody } from './smsService.js';
 import { updateCall } from '../db/supabase.js';
 
 export async function processRecording(callSid, recordingUrl, callerNumber, voiceMessageUrl = null) {
@@ -10,50 +9,47 @@ export async function processRecording(callSid, recordingUrl, callerNumber, voic
     const urlToTranscribe = voiceMessageUrl || recordingUrl;
     const transcript = await transcribeAudio(urlToTranscribe);
 
-    if (!transcript) {
-      await updateCall(callSid, { recording_url: recordingUrl, status: 'transcription_failed' });
-      await sendSMS(`📞 Missed call callback completed\nFrom: ${callerNumber}\nTranscription failed but recording available:\n${recordingUrl}`);
-      return;
-    }
-
-    await updateCall(callSid, {
-      recording_url: recordingUrl,
-      transcript: transcript,
-      voice_message_url: voiceMessageUrl,
-      status: 'completed'
-    });
-
+    const summary = getCallSummary(callSid);
     const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-    const message = `📞 *MISSED CALL - DEVI AI*
-━━━━━━━━━━━━━━━━━━━━
-👤 *Caller:* ${callerNumber}
-🕐 *Time:* ${now}
-━━━━━━━━━━━━━━━━━━━━
-📝 *Transcript:*
-${transcript}
-━━━━━━━━━━━━━━━━━━━━
-🎵 Recording: ${recordingUrl}${voiceMessageUrl ? `\n📨 Voice Message: ${voiceMessageUrl}` : ''}`;
+    // Update DB
+    await updateCall(callSid, {
+      recording_url:     recordingUrl,
+      transcript:        transcript || null,
+      voice_message_url: voiceMessageUrl || null,
+      status:            transcript ? 'completed' : 'transcription_failed',
+    }).catch(e => console.error('DB update error:', e.message));
 
-    const whatsappSuccess = await sendWhatsAppMessage(message);
+    // Build and send SMS with everything
+    const smsBody = buildSmsBody({
+      callerNumber,
+      intent:       summary?.intent   || 'general',
+      keyPoints:    summary?.keyPoints || [],
+      transcript:   transcript        || null,
+      recordingUrl: recordingUrl + (recordingUrl.endsWith('.mp3') ? '' : '.mp3'),
+      duration:     summary?.duration || null,
+      time:         now,
+    });
 
-    if (whatsappSuccess && recordingUrl) {
-      await sendWhatsAppAudio(recordingUrl, `Call from ${callerNumber}`);
-      if (voiceMessageUrl) {
-        await sendWhatsAppAudio(voiceMessageUrl, `Voice message from ${callerNumber}`);
-      }
-    } else {
-      console.log('WhatsApp failed, falling back to SMS');
-      await sendSMS(`Missed call from ${callerNumber}\n\nTranscript:\n${transcript}\n\nRecording: ${recordingUrl}`);
-    }
+    await sendSMS(smsBody);
+    console.log('Full SMS sent for call:', callSid);
+
+    clearCallMemory(callSid);
 
   } catch (error) {
-    console.error('Processing error:', error);
-    await updateCall(callSid, { status: 'processing_failed' });
+    console.error('Processing error:', error.message);
+
+    // Fallback SMS — always send something
     try {
-      await sendSMS(`Error processing call from ${callerNumber}. Recording: ${recordingUrl}`);
-    } catch (smsError) {
-      console.error('SMS fallback also failed:', smsError);
+      await sendSMS(
+        `📞 DEVI — Missed Call\nFrom: ${callerNumber}\n` +
+        `Recording: ${recordingUrl}.mp3\n(Processing error — raw recording only)`
+      );
+    } catch (smsErr) {
+      console.error('Fallback SMS also failed:', smsErr.message);
     }
+
+    await updateCall(callSid, { status: 'processing_failed' })
+      .catch(() => {});
   }
 }
