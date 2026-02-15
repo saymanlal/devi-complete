@@ -21,40 +21,53 @@ public class CallObserver extends ContentObserver {
     private String lastNum = "";
     private long lastDate = 0;
     private int notifId = 2000;
+    private long wakeStartTime = 0;
+    private static final String BACKEND = "https://devi-missed-call-ai.onrender.com";
 
     public CallObserver(Handler h, Context c) {
         super(h);
         this.ctx = c;
         createChannels();
         MainActivity.writeLog("CallObserver initialized");
-        showNotif("DEVI Started", "Monitoring all calls", false);
+        // Wake Render on app start so it's warm immediately
+        wakeBackend("app start");
     }
 
     private void createChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager mgr = ctx.getSystemService(NotificationManager.class);
-
             NotificationChannel alert = new NotificationChannel(
-                "DEVI_ALERT",
-                "Call Alerts",
-                NotificationManager.IMPORTANCE_HIGH
-            );
-            alert.setDescription("Missed call alerts");
+                "DEVI_ALERT", "Call Alerts", NotificationManager.IMPORTANCE_HIGH);
             alert.enableVibration(true);
             alert.setShowBadge(true);
-
             NotificationChannel info = new NotificationChannel(
-                "DEVI_INFO",
-                "Call Info",
-                NotificationManager.IMPORTANCE_DEFAULT
-            );
-            info.setDescription("Call activity");
-
+                "DEVI_INFO", "Call Info", NotificationManager.IMPORTANCE_DEFAULT);
             mgr.createNotificationChannel(alert);
             mgr.createNotificationChannel(info);
-
             MainActivity.writeLog("Notification channels created");
         }
+    }
+
+    // Silent fire-and-forget ping — wakes Render, logs result only
+    private void wakeBackend(final String reason) {
+        wakeStartTime = System.currentTimeMillis();
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    URL url = new URL(BACKEND + "/health");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(90000);
+                    conn.setReadTimeout(90000);
+                    int code = conn.getResponseCode();
+                    long ms = System.currentTimeMillis() - wakeStartTime;
+                    MainActivity.writeLog("Backend ready (" + reason + ") in " + ms + "ms");
+                    conn.disconnect();
+                } catch (Exception e) {
+                    MainActivity.writeLog("Backend wake failed: " + e.getMessage());
+                }
+            }
+        }).start();
     }
 
     @Override
@@ -67,8 +80,6 @@ public class CallObserver extends ContentObserver {
     private void check() {
         Cursor c = null;
         try {
-            // FIX: Use Uri with limit parameter instead of LIMIT in sortOrder string
-            // This works correctly on all Android versions including Android 15
             Uri uri = CallLog.Calls.CONTENT_URI.buildUpon()
                 .appendQueryParameter("limit", "1")
                 .build();
@@ -82,51 +93,44 @@ public class CallObserver extends ContentObserver {
             );
 
             if (c != null && c.moveToFirst()) {
-                String num = c.getString(0);
-                long date = c.getLong(1);
-                int type = c.getInt(2);
+                String num  = c.getString(0);
+                long   date = c.getLong(1);
+                int    type = c.getInt(2);
+                long   age  = (System.currentTimeMillis() - date) / 1000;
 
                 String typeStr = type == 1 ? "INCOMING" : type == 2 ? "OUTGOING" : type == 3 ? "MISSED" : "UNKNOWN";
-                long age = (System.currentTimeMillis() - date) / 1000;
+                MainActivity.writeLog(typeStr + ": " + num + " (" + age + "s ago)");
 
-                MainActivity.writeLog(typeStr + " call: " + num + " (" + age + "s ago)");
-                showNotif("📞 " + typeStr, num + " - " + age + "s ago", false);
+                // Wake Render the moment an INCOMING call appears (phone is still ringing)
+                // By the time you don't answer and it becomes MISSED, backend is already warm
+                if (type == 1) {
+                    MainActivity.writeLog("Incoming detected — waking backend now");
+                    wakeBackend("incoming call");
+                }
 
                 if (type == 3) {
-
                     if (num.equals(lastNum) && date == lastDate) {
-                        MainActivity.writeLog("Duplicate - ignoring");
+                        MainActivity.writeLog("Duplicate — ignoring");
                         return;
                     }
-
                     if (age > 30) {
-                        MainActivity.writeLog("Too old - ignoring");
+                        MainActivity.writeLog("Too old (" + age + "s) — ignoring");
                         return;
                     }
 
-                    lastNum = num;
+                    lastNum  = num;
                     lastDate = date;
 
                     String fmt = num.replaceAll("[\\s\\-()]", "");
                     if (!fmt.startsWith("+") && fmt.length() == 10 && fmt.matches("^[6-9].*")) {
                         fmt = "+91" + fmt;
                     }
-
                     final String finalNum = fmt;
 
-                    MainActivity.writeLog("🚨 PROCESSING MISSED: " + finalNum);
-                    showNotif("🚨 MISSED CALL!", "From: " + finalNum, true);
-
-                    new Handler(ctx.getMainLooper()).postDelayed(new Runnable() {
-                        public void run() {
-                            showNotif("📞 Calling back NOW!", finalNum, true);
-                        }
-                    }, 1000);
-
+                    MainActivity.writeLog("Missed call: " + finalNum + " — sending to DEVI");
+                    showNotif("Missed: " + finalNum, "DEVI connecting...", true);
                     send(finalNum, date);
                 }
-            } else {
-                MainActivity.writeLog("No calls found");
             }
         } catch (Exception e) {
             MainActivity.writeLog("Check ERROR: " + e.toString());
@@ -136,44 +140,51 @@ public class CallObserver extends ContentObserver {
     }
 
     private void send(final String num, final long time) {
-        MainActivity.writeLog("Sending to backend: " + num);
-        showNotif("📡 Connecting", "Sending to server", true);
+        final long sendStart = System.currentTimeMillis();
+        MainActivity.writeLog("Connecting to backend...");
 
         new Thread(new Runnable() {
             public void run() {
-                try {
-                    URL url = new URL("https://devi-missed-call-ai.onrender.com/webhook/missed-call");
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("POST");
-                    conn.setRequestProperty("Content-Type", "application/json");
-                    conn.setDoOutput(true);
-                    conn.setConnectTimeout(15000);
-                    conn.setReadTimeout(15000);
+                int maxAttempts = 3;
+                for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                    try {
+                        URL url = new URL(BACKEND + "/webhook/missed-call");
+                        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                        conn.setRequestMethod("POST");
+                        conn.setRequestProperty("Content-Type", "application/json");
+                        conn.setDoOutput(true);
+                        conn.setConnectTimeout(90000); // 90s — enough for Render cold start
+                        conn.setReadTimeout(90000);
 
-                    String json = "{\"caller\":\"" + num + "\",\"timestamp\":" + time + "}";
-                    MainActivity.writeLog("Payload: " + json);
+                        String json = "{\"caller\":\"" + num + "\",\"timestamp\":" + time + "}";
+                        OutputStream os = conn.getOutputStream();
+                        os.write(json.getBytes("UTF-8"));
+                        os.close();
 
-                    OutputStream os = conn.getOutputStream();
-                    os.write(json.getBytes());
-                    os.close();
+                        int code = conn.getResponseCode();
+                        conn.disconnect();
+                        long elapsed = (System.currentTimeMillis() - sendStart) / 1000;
 
-                    int code = conn.getResponseCode();
-                    MainActivity.writeLog("Backend response: " + code);
+                        if (code == 200) {
+                            MainActivity.writeLog("DEVI calling " + num + " — took " + elapsed + "s");
+                            showNotif("DEVI calling " + num, "Connected in " + elapsed + "s", true);
+                            return; // success — stop
+                        } else {
+                            MainActivity.writeLog("Attempt " + attempt + ": HTTP " + code + " — retrying");
+                        }
 
-                    if (code == 200) {
-                        MainActivity.writeLog("✅ SUCCESS!");
-                        showNotif("✅ SUCCESS!", "DEVI is calling " + num + " now!", true);
-                    } else {
-                        MainActivity.writeLog("❌ Backend error: " + code);
-                        showNotif("❌ Backend Error", "HTTP " + code, true);
+                    } catch (Exception e) {
+                        long elapsed = (System.currentTimeMillis() - sendStart) / 1000;
+                        MainActivity.writeLog("Attempt " + attempt + " (" + elapsed + "s): " + e.getMessage());
+                        if (attempt < maxAttempts) {
+                            try { Thread.sleep(2000); } catch (Exception ignored) {}
+                            MainActivity.writeLog("Retrying " + (attempt + 1) + "/" + maxAttempts + "...");
+                        }
                     }
-
-                    conn.disconnect();
-
-                } catch (Exception e) {
-                    MainActivity.writeLog("❌ Connection failed: " + e.toString());
-                    showNotif("❌ Connection Failed", e.getMessage(), true);
                 }
+                // All 3 failed — log quietly, no scary notification
+                long elapsed = (System.currentTimeMillis() - sendStart) / 1000;
+                MainActivity.writeLog("Backend unreachable after " + elapsed + "s — check Render dashboard");
             }
         }).start();
     }
@@ -182,25 +193,14 @@ public class CallObserver extends ContentObserver {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 String channel = isAlert ? "DEVI_ALERT" : "DEVI_INFO";
-
-                Notification.Builder builder = new Notification.Builder(ctx, channel)
+                Notification n = new Notification.Builder(ctx, channel)
                     .setContentTitle(title)
                     .setContentText(text)
                     .setSmallIcon(android.R.drawable.ic_dialog_info)
                     .setAutoCancel(true)
                     .setShowWhen(true)
-                    .setCategory(Notification.CATEGORY_CALL);
-
-                if (isAlert) {
-                    builder.setPriority(Notification.PRIORITY_HIGH);
-                }
-
-                Notification n = builder.build();
-
-                NotificationManager mgr = ctx.getSystemService(NotificationManager.class);
-                mgr.notify(notifId++, n);
-
-                MainActivity.writeLog("Notification: " + title);
+                    .build();
+                ctx.getSystemService(NotificationManager.class).notify(notifId++, n);
             }
         } catch (Exception e) {
             MainActivity.writeLog("Notif ERROR: " + e.toString());
