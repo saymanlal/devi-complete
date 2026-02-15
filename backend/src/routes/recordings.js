@@ -1,47 +1,49 @@
 import express from 'express';
-import { getCallBySid, updateCall } from '../db/supabase.js';
-import { twilioClient } from '../services/twilioService.js';
-import { sendSMS } from '../services/smsService.js';
+import twilio from 'twilio';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const router = express.Router();
 
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
 router.post('/complete', async (req, res) => {
+  console.log('Recording webhook:', req.body);
+  
+  res.sendStatus(200);
+  
   try {
-    const { CallSid, RecordingUrl, RecordingSid } = req.body;
+    const { RecordingSid, CallSid } = req.body;
     
-    // Respond immediately to Twilio
-    res.sendStatus(200);
-    
-    const call = await getCallBySid(CallSid);
-    if (!call) {
-      console.error('Call not found for recording:', CallSid);
+    if (!RecordingSid) {
+      console.error('No RecordingSid received');
       return;
     }
     
-    // Fetch recording to get PUBLIC URL (no auth required)
     const recording = await twilioClient.recordings(RecordingSid).fetch();
-    
-    // Build public URL - .uri is publicly accessible without authentication
     const publicUrl = `https://api.twilio.com${recording.uri.replace('.json', '.mp3')}`;
     
-    console.log('Public recording URL:', publicUrl);
+    console.log('Public URL:', publicUrl);
     
-    // Update database
-    await updateCall(CallSid, {
-      recording_url: publicUrl,
-      status: 'completed'
-    }).catch(e => console.error('DB update error:', e.message));
+    const call = await twilioClient.calls(CallSid).fetch();
+    const callerNumber = call.from;
     
-    // Send simple SMS with caller number and public recording link
-    const smsBody = `DEVI Missed Call
-From: ${call.caller_number}
-Recording: ${publicUrl}`;
+    await twilioClient.messages.create({
+      body: `DEVI Missed Call
+From: ${callerNumber}
+Recording: ${publicUrl}`,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: process.env.USER_PHONE_NUMBER,
+    });
     
-    await sendSMS(smsBody);
-    console.log('SMS sent for call:', CallSid);
+    console.log('SMS sent successfully');
     
   } catch (error) {
-    console.error('Recording webhook error:', error);
+    console.error('Recording error:', error.message);
   }
 });
 
