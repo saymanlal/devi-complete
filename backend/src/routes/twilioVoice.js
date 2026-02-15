@@ -7,8 +7,8 @@ import { updateCall } from '../db/supabase.js';
 const router = express.Router();
 const { VoiceResponse } = twilio.twiml;
 
-// CHANGED: Using basic voice that ALWAYS works
-const VOICE = 'woman';
+// Alice - Twilio's multilingual voice (good Hindi support)
+const VOICE = 'alice';
 const LANGUAGE = 'hi-IN';
 const conversationState = new Map();
 
@@ -32,36 +32,22 @@ function sayAndHangup(response, text) {
 router.post('/', async (req, res) => {
   const { CallSid, SpeechResult, RecordingUrl, From, CallStatus, CallDuration } = req.body;
   
-  console.log('=== VOICE WEBHOOK ===', { 
-    CallSid, 
-    CallStatus, 
-    From,
-    To: req.body.To,
-    SpeechResult: !!SpeechResult, 
-    RecordingUrl: !!RecordingUrl 
-  });
+  console.log('=== VOICE [alice] ===', { CallSid, CallStatus, SpeechResult: !!SpeechResult });
   
   const ACTION = `${process.env.BASE_URL}/webhook/twilio-voice`;
   const response = new VoiceResponse();
 
   try {
     if (CallStatus === 'completed') {
-      await updateCall(CallSid, {
-        call_duration: parseInt(CallDuration) || 0,
-        status: 'call_completed',
-      }).catch(() => {});
+      await updateCall(CallSid, { call_duration: parseInt(CallDuration) || 0, status: 'call_completed' }).catch(() => {});
       conversationState.delete(CallSid);
       return res.sendStatus(200);
     }
 
     if (!conversationState.has(CallSid)) {
       conversationState.set(CallSid, {
-        history: [],
-        stage: 'greeting',
-        messageOffered: false,
-        languageStyle: 'hindi',
-        voiceMessageUrl: null,
-        callerNumber: From || '',
+        history: [], stage: 'greeting', messageOffered: false, languageStyle: 'hindi',
+        voiceMessageUrl: null, callerNumber: From || '',
       });
       initCallMemory(CallSid, From || '');
     }
@@ -72,8 +58,6 @@ router.post('/', async (req, res) => {
       state.stage = 'conversation';
       const opening = `${GREETING_TEXT} ${INITIAL_QUESTION}`;
       state.history.push({ role: 'assistant', content: opening });
-      
-      console.log('Sending greeting TwiML');
       sayAndGather(response, opening, ACTION);
       return res.type('text/xml').send(response.toString());
     }
@@ -94,12 +78,7 @@ router.post('/', async (req, res) => {
           state.stage = 'recording';
           response.say({ voice: VOICE, language: LANGUAGE }, 'Bilkul. Beep ke baad apna sandesh boliye. Jab khatam ho jaye toh line kaatiye.');
           response.record({
-            maxLength: 120,
-            playBeep: true,
-            action: ACTION,
-            method: 'POST',
-            timeout: 5,
-            finishOnKey: '#',
+            maxLength: 120, playBeep: true, action: ACTION, method: 'POST', timeout: 5, finishOnKey: '#',
             recordingStatusCallback: `${process.env.BASE_URL}/webhook/recording/complete`,
             recordingStatusCallbackMethod: 'POST',
           });
@@ -120,12 +99,7 @@ router.post('/', async (req, res) => {
           state.stage = 'recording';
           response.say({ voice: VOICE, language: LANGUAGE }, 'Zaroor. Beep ke baad boliye.');
           response.record({
-            maxLength: 120,
-            playBeep: true,
-            action: ACTION,
-            method: 'POST',
-            timeout: 5,
-            finishOnKey: '#',
+            maxLength: 120, playBeep: true, action: ACTION, method: 'POST', timeout: 5, finishOnKey: '#',
             recordingStatusCallback: `${process.env.BASE_URL}/webhook/recording/complete`,
             recordingStatusCallbackMethod: 'POST',
           });
@@ -171,11 +145,8 @@ router.post('/', async (req, res) => {
     return res.type('text/xml').send(response.toString());
 
   } catch (error) {
-    console.error('Voice webhook error:', error.message, error.stack);
-    
-    // Fallback: basic working TwiML
-    response.say('Hello. There was an error. Please call back.');
-    response.hangup();
+    console.error('Voice webhook error:', error.message);
+    sayAndHangup(response, 'Kshama karein, thodi technical samasya aa gayi. Simon Sir jaldi aapko call karenge. Namaste.');
     return res.type('text/xml').send(response.toString());
   }
 });
