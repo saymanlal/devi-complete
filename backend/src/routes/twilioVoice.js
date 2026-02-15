@@ -7,8 +7,7 @@ import { updateCall } from '../db/supabase.js';
 const router = express.Router();
 const { VoiceResponse } = twilio.twiml;
 
-// AWS Polly Aditi Neural - BEST Hindi pronunciation
-const VOICE = 'Polly.Aditi-Neural';
+const VOICE = 'Polly.Aditi';
 const LANGUAGE = 'hi-IN';
 const conversationState = new Map();
 
@@ -30,9 +29,15 @@ function sayAndHangup(response, text) {
 }
 
 router.post('/', async (req, res) => {
-  const { CallSid, SpeechResult, RecordingUrl, From, CallStatus, CallDuration } = req.body;
+  const { CallSid, SpeechResult, RecordingUrl, RecordingSid, From, CallStatus, CallDuration } = req.body;
   
-  console.log('=== VOICE [Aditi-Neural] ===', { CallSid, CallStatus, SpeechResult: !!SpeechResult });
+  console.log('=== VOICE WEBHOOK ===', { 
+    CallSid, 
+    CallStatus, 
+    SpeechResult: !!SpeechResult, 
+    RecordingUrl: !!RecordingUrl,
+    RecordingSid: RecordingSid || 'none'
+  });
   
   const ACTION = `${process.env.BASE_URL}/webhook/twilio-voice`;
   const response = new VoiceResponse();
@@ -62,6 +67,20 @@ router.post('/', async (req, res) => {
       return res.type('text/xml').send(response.toString());
     }
 
+    // CRITICAL: Handle recording completion
+    if (RecordingUrl && RecordingSid) {
+      console.log('=== RECORDING DETECTED IN VOICE WEBHOOK ===');
+      console.log('RecordingSid:', RecordingSid);
+      console.log('RecordingUrl:', RecordingUrl);
+      
+      state.voiceMessageUrl = RecordingUrl + '.mp3';
+      await updateCall(CallSid, { voice_message_url: state.voiceMessageUrl }).catch(() => {});
+      
+      sayAndHangup(response, 'Aapka sandesh record ho gaya hai. Simon Sir jaise hi available honge, sun lenge. Dhanyawaad. Namaste.');
+      conversationState.delete(CallSid);
+      return res.type('text/xml').send(response.toString());
+    }
+
     if (state.stage === 'recording' && RecordingUrl) {
       state.voiceMessageUrl = RecordingUrl + '.mp3';
       await updateCall(CallSid, { voice_message_url: state.voiceMessageUrl }).catch(() => {});
@@ -76,9 +95,15 @@ router.post('/', async (req, res) => {
         const agreed = /haan|yes|ha |zaroor|bilkul|okay|thik|sure|chhod|bolta|record|message/.test(lower);
         if (agreed) {
           state.stage = 'recording';
-          response.say({ voice: VOICE, language: LANGUAGE }, 'Bilkul. Beep ke baad apna sandesh boliye. Jab khatam ho jaye toh line kaatiye.');
+          console.log('=== STARTING RECORDING ===');
+          response.say({ voice: VOICE, language: LANGUAGE }, 'Bilkul. Beep ke baad apna sandesh boliye.');
           response.record({
-            maxLength: 120, playBeep: true, action: ACTION, method: 'POST', timeout: 5, finishOnKey: '#',
+            maxLength: 120,
+            playBeep: true,
+            action: ACTION,
+            method: 'POST',
+            timeout: 5,
+            finishOnKey: '#',
             recordingStatusCallback: `${process.env.BASE_URL}/webhook/recording/complete`,
             recordingStatusCallbackMethod: 'POST',
           });
@@ -97,9 +122,15 @@ router.post('/', async (req, res) => {
         const wantsMore = /haan|yes|message|chhod|bolta|aur|kuch|batana/.test(lower);
         if (wantsMore) {
           state.stage = 'recording';
+          console.log('=== STARTING RECORDING (from closing) ===');
           response.say({ voice: VOICE, language: LANGUAGE }, 'Zaroor. Beep ke baad boliye.');
           response.record({
-            maxLength: 120, playBeep: true, action: ACTION, method: 'POST', timeout: 5, finishOnKey: '#',
+            maxLength: 120,
+            playBeep: true,
+            action: ACTION,
+            method: 'POST',
+            timeout: 5,
+            finishOnKey: '#',
             recordingStatusCallback: `${process.env.BASE_URL}/webhook/recording/complete`,
             recordingStatusCallbackMethod: 'POST',
           });
@@ -145,8 +176,8 @@ router.post('/', async (req, res) => {
     return res.type('text/xml').send(response.toString());
 
   } catch (error) {
-    console.error('Voice webhook error:', error.message);
-    sayAndHangup(response, 'Kshama karein, thodi technical samasya aa gayi. Simon Sir jaldi aapko call karenge. Namaste.');
+    console.error('Voice webhook error:', error.message, error.stack);
+    sayAndHangup(response, 'Kshama karein, thodi technical sa-mas-ya aa gayi. Simon Sir jaldi aapko call karenge. Namaste.');
     return res.type('text/xml').send(response.toString());
   }
 });
