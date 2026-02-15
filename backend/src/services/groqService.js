@@ -5,7 +5,6 @@ import { SYSTEM_PROMPT, FALLBACK_RESPONSES, ABOUT_DEVI_RESPONSE } from '../confi
 dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 const callMemory = new Map();
 
 export function initCallMemory(callSid, callerNumber) {

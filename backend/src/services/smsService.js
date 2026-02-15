@@ -18,19 +18,3 @@ export async function sendSMS(body) {
     throw error;
   }
 }
-
-export function buildSmsBody({ callerNumber, recordingUrl }) {
-  let fullUrl = recordingUrl;
-  
-  if (!recordingUrl.includes('http')) {
-    fullUrl = `https://api.twilio.com${recordingUrl}`;
-  }
-  
-  if (!fullUrl.endsWith('.mp3')) {
-    fullUrl = `${fullUrl}.mp3`;
-  }
-  
-  return `DEVI Missed Call
-From: ${callerNumber}
-Recording: ${fullUrl}`;
-}

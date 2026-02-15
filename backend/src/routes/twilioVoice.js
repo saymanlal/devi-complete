@@ -1,6 +1,6 @@
 import express from 'express';
 import twilio from 'twilio';
-import { generateAIResponse, detectLanguageMix, initCallMemory, updateCallMemory, getCallSummary } from '../services/groqService.js';
+import { generateAIResponse, detectLanguageMix, initCallMemory, updateCallMemory } from '../services/groqService.js';
 import { GREETING_TEXT, INITIAL_QUESTION, MESSAGE_PROMPT_MID, CLOSING_PROMPT } from '../config/prompts.js';
 import { updateCall } from '../db/supabase.js';
 
@@ -9,7 +9,6 @@ const { VoiceResponse } = twilio.twiml;
 
 const VOICE = 'Polly.Kajal';
 const LANGUAGE = 'hi-IN';
-
 const conversationState = new Map();
 
 function sayAndGather(response, text, actionUrl) {
@@ -31,6 +30,9 @@ function sayAndHangup(response, text) {
 
 router.post('/', async (req, res) => {
   const { CallSid, SpeechResult, RecordingUrl, From, CallStatus, CallDuration } = req.body;
+  
+  console.log('=== VOICE WEBHOOK ===', { CallSid, CallStatus, SpeechResult: !!SpeechResult, RecordingUrl: !!RecordingUrl });
+  
   const ACTION = `${process.env.BASE_URL}/webhook/twilio-voice`;
   const response = new VoiceResponse();
 
@@ -88,6 +90,8 @@ router.post('/', async (req, res) => {
             method: 'POST',
             timeout: 5,
             finishOnKey: '#',
+            recordingStatusCallback: `${process.env.BASE_URL}/webhook/recording/complete`,
+            recordingStatusCallbackMethod: 'POST',
           });
           return res.type('text/xml').send(response.toString());
         } else {
@@ -112,6 +116,8 @@ router.post('/', async (req, res) => {
             method: 'POST',
             timeout: 5,
             finishOnKey: '#',
+            recordingStatusCallback: `${process.env.BASE_URL}/webhook/recording/complete`,
+            recordingStatusCallbackMethod: 'POST',
           });
           return res.type('text/xml').send(response.toString());
         }
@@ -155,7 +161,7 @@ router.post('/', async (req, res) => {
     return res.type('text/xml').send(response.toString());
 
   } catch (error) {
-    console.error('Voice webhook error:', error.message);
+    console.error('Voice webhook error:', error.message, error.stack);
     sayAndHangup(response, 'Kshama karein, thodi technical samasya aa gayi. Simon Sir jaldi aapko call karenge. Namaste.');
     return res.type('text/xml').send(response.toString());
   }

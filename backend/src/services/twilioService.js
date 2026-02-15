@@ -16,7 +16,6 @@ export async function initiateCallback(callerNumber) {
       url: `${process.env.BASE_URL}/webhook/twilio-voice`,
       method: 'POST',
       timeout: 60,
-      // CRITICAL: NO statusCallback - it's interfering
     });
     
     console.log('Callback initiated:', call.sid);

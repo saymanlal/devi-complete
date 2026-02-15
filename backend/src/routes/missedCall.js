@@ -16,9 +16,8 @@ router.post('/', async (req, res) => {
     }
     
     const sanitizedCaller = sanitizePhoneNumber(caller);
-    
-    const lastCallback = recentCallbacks.get(sanitizedCaller);
     const now = Date.now();
+    const lastCallback = recentCallbacks.get(sanitizedCaller);
     
     if (lastCallback && (now - lastCallback) < 60000) {
       return res.json({
@@ -28,7 +27,6 @@ router.post('/', async (req, res) => {
     }
     
     recentCallbacks.set(sanitizedCaller, now);
-    
     log('info', 'Missed call received', { caller: sanitizedCaller });
     
     const callSid = await initiateCallback(sanitizedCaller);

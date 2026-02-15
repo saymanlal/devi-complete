@@ -13,27 +13,18 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-/* ── Health — Android pings this to wake Render from sleep ── */
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-/* ── Routes — paths must match URLs set in twilioService.js exactly ── */
-// Android app → POST /webhook/missed-call
 app.use('/webhook/missed-call', missedCallRouter);
-
-// Twilio voice + status callback → /webhook/twilio-voice
 app.use('/webhook/twilio-voice', twilioVoiceRouter);
-
-// Twilio recording callback → /webhook/recording/complete
 app.use('/webhook/recording', recordingsRouter);
 
-/* ── 404 fallback ── */
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found', path: req.path });
 });
 
-/* ── Start ── */
 app.listen(PORT, async () => {
   console.log(`DEVI backend running on port ${PORT}`);
   await initDatabase();
