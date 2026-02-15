@@ -18,11 +18,9 @@ export async function initiateCallback(callerNumber) {
       url: `${BASE_URL}/webhook/twilio-voice`,
       statusCallback: `${BASE_URL}/webhook/twilio-voice`,
       statusCallbackEvent: ['completed'],
-      record: true,
-      recordingStatusCallback: `${BASE_URL}/webhook/recording/complete`,
-      recordingStatusCallbackEvent: ['completed'],
+      statusCallbackMethod: 'POST',
+      record: false, // We'll record via TwiML instead
       timeout: 30,
-      // machineDetection REMOVED - causes "application error" on trial accounts
     });
     
     console.log('Callback initiated:', call.sid);
@@ -30,6 +28,21 @@ export async function initiateCallback(callerNumber) {
   } catch (error) {
     console.error('Twilio callback error:', error);
     throw error;
+  }
+}
+
+// Function to get PUBLIC recording URL (no authentication needed)
+export async function getPublicRecordingUrl(recordingSid) {
+  try {
+    const recording = await client.recordings(recordingSid).fetch();
+    
+    // Construct the PUBLIC media URL that doesn't require auth
+    const publicUrl = `https://api.twilio.com${recording.mediaUrl}`;
+    
+    return publicUrl;
+  } catch (error) {
+    console.error('Error fetching recording:', error);
+    return null;
   }
 }
 

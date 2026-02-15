@@ -1,190 +1,101 @@
 import express from 'express';
 import twilio from 'twilio';
-import {
-  generateAIResponse,
-  detectLanguageMix,
-  initCallMemory,
-  updateCallMemory,
-} from '../services/groqService.js';
-import {
-  GREETING_TEXT,
-  INITIAL_QUESTION,
-  MESSAGE_PROMPT_MID,
-  CLOSING_PROMPT,
-} from '../config/prompts.js';
 import { updateCall } from '../db/supabase.js';
 
 const router = express.Router();
 const { VoiceResponse } = twilio.twiml;
 
-const VOICE    = 'Polly.Kajal';
+const VOICE = 'Polly.Kajal';
 const LANGUAGE = 'hi-IN';
 
 const conversationState = new Map();
 
-function sayAndGather(response, text, actionUrl) {
-  response.say({ voice: VOICE, language: LANGUAGE }, text);
-  response.gather({
-    input:         'speech',
-    language:      LANGUAGE,
-    speechTimeout: 'auto',
-    timeout:       10,
-    action:        actionUrl,
-    method:        'POST',
-    speechModel:   'phone_call',
-    hints:         'haan,nahi,yes,no,okay,thik hai,bilkul,zaroor,message,appointment',
-  });
-}
-
-function sayAndHangup(response, text) {
-  response.say({ voice: VOICE, language: LANGUAGE }, text);
-  response.hangup();
-}
-
 router.post('/', async (req, res) => {
   const { CallSid, SpeechResult, RecordingUrl, From, CallStatus, CallDuration } = req.body;
-  const ACTION   = process.env.BASE_URL + '/webhook/twilio-voice';
+  
+  console.log('Voice webhook received:', { CallSid, SpeechResult: !!SpeechResult, RecordingUrl: !!RecordingUrl, CallStatus });
+  
   const response = new VoiceResponse();
-
-  // ── Status callback: call completed ─────────────────────────────
-  if (CallStatus === 'completed') {
-    await updateCall(CallSid, {
-      call_duration: parseInt(CallDuration) || 0,
-      status: 'call_completed',
-    }).catch(() => {});
-    conversationState.delete(CallSid);
-    return res.sendStatus(200);
-  }
-
-  // ── Init conversation state ──────────────────────────────────────
-  if (!conversationState.has(CallSid)) {
-    conversationState.set(CallSid, {
-      history:         [],
-      stage:           'greeting',
-      messageOffered:  false,
-      voiceMessageUrl: null,
-      callerNumber:    From || '',
-    });
-    initCallMemory(CallSid, From || '');
-  }
-
-  const state = conversationState.get(CallSid);
-
+  
   try {
-
-    // ── GREETING ─────────────────────────────────────────────────
+    // Call completed callback
+    if (CallStatus === 'completed') {
+      await updateCall(CallSid, {
+        call_duration: parseInt(CallDuration) || 0,
+        status: 'call_completed',
+      }).catch(() => {});
+      conversationState.delete(CallSid);
+      return res.sendStatus(200);
+    }
+    
+    // Initialize state for new calls
+    if (!conversationState.has(CallSid)) {
+      conversationState.set(CallSid, {
+        stage: 'greeting',
+        callerNumber: From || '',
+      });
+    }
+    
+    const state = conversationState.get(CallSid);
+    const ACTION_URL = `${process.env.BASE_URL}/webhook/twilio-voice`;
+    
+    // STAGE: Greeting
     if (state.stage === 'greeting') {
-      state.stage = 'conversation';
-      const opening = GREETING_TEXT + ' ' + INITIAL_QUESTION;
-      state.history.push({ role: 'assistant', content: opening });
-      sayAndGather(response, opening, ACTION);
+      state.stage = 'recording';
+      
+      response.say(
+        { voice: VOICE, language: LANGUAGE },
+        'Namaskar! Main DEVI hoon, Simon Sir ki assistant. Sir abhi available nahi hain. Kripya beep ke baad apna sandesh chhod dijiye.'
+      );
+      
+      response.record({
+        maxLength: 120,
+        playBeep: true,
+        action: ACTION_URL,
+        recordingStatusCallback: `${process.env.BASE_URL}/webhook/recording/complete`,
+        recordingStatusCallbackMethod: 'POST',
+        timeout: 3,
+        finishOnKey: '#',
+      });
+      
       return res.type('text/xml').send(response.toString());
     }
-
-    // ── RECORDING arrived ────────────────────────────────────────
+    
+    // STAGE: Recording received
     if (state.stage === 'recording' && RecordingUrl) {
-      state.voiceMessageUrl = RecordingUrl + '.mp3';
-      await updateCall(CallSid, { voice_message_url: state.voiceMessageUrl }).catch(() => {});
-      sayAndHangup(response,
-        'Aapka sandesh record ho gaya hai. Simon Sir jaise hi available honge, sun lenge. Dhanyawaad. Namaste.'
+      await updateCall(CallSid, {
+        voice_message_url: RecordingUrl + '.mp3'
+      }).catch(() => {});
+      
+      response.say(
+        { voice: VOICE, language: LANGUAGE },
+        'Dhanyawaad. Aapka sandesh Simon Sir tak pahunch jayega. Namaste.'
       );
+      response.hangup();
+      
       conversationState.delete(CallSid);
       return res.type('text/xml').send(response.toString());
     }
-
-    // ── AWAITING voice message YES/NO ────────────────────────────
-    if (state.stage === 'awaiting_message_yn') {
-      if (SpeechResult) {
-        const lower = SpeechResult.toLowerCase();
-        const agreed = /haan|yes|ha |zaroor|bilkul|okay|thik|sure|chhod|bolta|record|message/.test(lower);
-        if (agreed) {
-          state.stage = 'recording';
-          response.say({ voice: VOICE, language: LANGUAGE },
-            'Bilkul. Beep ke baad apna sandesh boliye. Khatam hone par line kaat dijiye.'
-          );
-          response.record({
-            maxLength:   120,
-            playBeep:    true,
-            action:      ACTION,
-            method:      'POST',
-            timeout:     5,
-            finishOnKey: '#',
-          });
-          return res.type('text/xml').send(response.toString());
-        } else {
-          state.stage = 'closing';
-          sayAndGather(response, CLOSING_PROMPT, ACTION);
-          return res.type('text/xml').send(response.toString());
-        }
-      }
-    }
-
-    // ── CLOSING ──────────────────────────────────────────────────
-    if (state.stage === 'closing') {
-      if (SpeechResult) {
-        const lower   = SpeechResult.toLowerCase();
-        const wantsMore = /haan|yes|message|chhod|bolta|aur|kuch|batana/.test(lower);
-        if (wantsMore) {
-          state.stage = 'recording';
-          response.say({ voice: VOICE, language: LANGUAGE }, 'Zaroor. Beep ke baad boliye.');
-          response.record({
-            maxLength:   120,
-            playBeep:    true,
-            action:      ACTION,
-            method:      'POST',
-            timeout:     5,
-            finishOnKey: '#',
-          });
-          return res.type('text/xml').send(response.toString());
-        }
-      }
-      sayAndHangup(response,
-        'Theek hai. Aapka sandesh Simon Sir tak pahuncha diya jayega. Dhanyawaad. Namaste.'
-      );
-      conversationState.delete(CallSid);
-      return res.type('text/xml').send(response.toString());
-    }
-
-    // ── MAIN AI CONVERSATION ─────────────────────────────────────
-    if (SpeechResult) {
-      const langStyle = detectLanguageMix(SpeechResult);
-      state.history.push({ role: 'user', content: SpeechResult });
-      updateCallMemory(CallSid, SpeechResult, '');
-
-      const aiResponse = await generateAIResponse(state.history, langStyle);
-      state.history.push({ role: 'assistant', content: aiResponse });
-
-      const userTurns = state.history.filter(m => m.role === 'user').length;
-      if (userTurns >= 3 && !state.messageOffered) {
-        state.messageOffered = true;
-        state.stage = 'awaiting_message_yn';
-        sayAndGather(response, aiResponse + ' ' + MESSAGE_PROMPT_MID, ACTION);
-        return res.type('text/xml').send(response.toString());
-      }
-
-      sayAndGather(response, aiResponse, ACTION);
-      return res.type('text/xml').send(response.toString());
-    }
-
-    // ── No speech ────────────────────────────────────────────────
-    if (!state.messageOffered) {
-      state.messageOffered = true;
-      state.stage = 'awaiting_message_yn';
-      sayAndGather(response, MESSAGE_PROMPT_MID, ACTION);
-      return res.type('text/xml').send(response.toString());
-    }
-
-    sayAndHangup(response,
-      'Koi baat nahi. Aapka sandesh pahuncha diya jayega. Dhanyawaad. Namaste.'
+    
+    // Fallback - just hangup gracefully
+    response.say(
+      { voice: VOICE, language: LANGUAGE },
+      'Dhanyawaad. Namaste.'
     );
+    response.hangup();
+    
     conversationState.delete(CallSid);
     return res.type('text/xml').send(response.toString());
-
+    
   } catch (error) {
     console.error('Voice webhook error:', error.message);
-    sayAndHangup(response,
-      'Kshama karein, thodi technical samasya aa gayi. Simon Sir jaldi aapko call karenge. Namaste.'
+    
+    response.say(
+      { voice: VOICE, language: LANGUAGE },
+      'Kshama karein, technical samasya aa gayi. Kripya baad mein call karein. Namaste.'
     );
+    response.hangup();
+    
     return res.type('text/xml').send(response.toString());
   }
 });
