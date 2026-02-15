@@ -11,6 +11,7 @@ drawable ic_status_dot
 drawable ic_whatsapp
 id status
 id toggle
+id viewLogs
 layout main
 string app_name
 style AppTheme

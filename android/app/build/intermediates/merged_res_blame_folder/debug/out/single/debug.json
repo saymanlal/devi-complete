@@ -1,42 +1,46 @@
 [
     {
-        "merged": "com.devi.app-merged_res-4:/drawable_ic_language.xml.flat",
-        "source": "com.devi.app-main-6:/drawable/ic_language.xml"
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/drawable_ic_language.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/drawable/ic_language.xml"
+    },
+    {
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/drawable_ic_whatsapp.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/drawable/ic_whatsapp.xml"
+    },
+    {
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/drawable_ic_call.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/drawable/ic_call.xml"
     },
     {
         "merged": "com.devi.app-merged_res-4:/layout_main.xml.flat",
         "source": "com.devi.app-main-6:/layout/main.xml"
     },
     {
-        "merged": "com.devi.app-merged_res-4:/drawable_ic_devi_logo.xml.flat",
-        "source": "com.devi.app-main-6:/drawable/ic_devi_logo.xml"
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/drawable_ic_record.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/drawable/ic_record.xml"
     },
     {
-        "merged": "com.devi.app-merged_res-4:/drawable_ic_cloud.xml.flat",
-        "source": "com.devi.app-main-6:/drawable/ic_cloud.xml"
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/layout_main.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/layout/main.xml"
     },
     {
-        "merged": "com.devi.app-merged_res-4:/drawable_ic_call.xml.flat",
-        "source": "com.devi.app-main-6:/drawable/ic_call.xml"
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/drawable_ic_status_dot.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/drawable/ic_status_dot.xml"
     },
     {
-        "merged": "com.devi.app-merged_res-4:/drawable_ic_status_dot.xml.flat",
-        "source": "com.devi.app-main-6:/drawable/ic_status_dot.xml"
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/drawable_ic_restart.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/drawable/ic_restart.xml"
     },
     {
-        "merged": "com.devi.app-merged_res-4:/drawable_ic_restart.xml.flat",
-        "source": "com.devi.app-main-6:/drawable/ic_restart.xml"
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/drawable_ic_devi_logo.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/drawable/ic_devi_logo.xml"
     },
     {
-        "merged": "com.devi.app-merged_res-4:/drawable_gradient_background.xml.flat",
-        "source": "com.devi.app-main-6:/drawable/gradient_background.xml"
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/drawable_ic_cloud.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/drawable/ic_cloud.xml"
     },
     {
-        "merged": "com.devi.app-merged_res-4:/drawable_ic_record.xml.flat",
-        "source": "com.devi.app-main-6:/drawable/ic_record.xml"
-    },
-    {
-        "merged": "com.devi.app-merged_res-4:/drawable_ic_whatsapp.xml.flat",
-        "source": "com.devi.app-main-6:/drawable/ic_whatsapp.xml"
+        "merged": "/home/krushn/.gradle/daemon/8.0/com.devi.app-merged_res-4:/drawable_gradient_background.xml.flat",
+        "source": "/home/krushn/.gradle/daemon/8.0/com.devi.app-main-6:/drawable/gradient_background.xml"
     }
 ]

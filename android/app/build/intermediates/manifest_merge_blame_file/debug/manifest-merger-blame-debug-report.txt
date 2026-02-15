@@ -9,54 +9,98 @@
 9        android:targetSdkVersion="35" />
 10
 11    <uses-permission android:name="android.permission.READ_CALL_LOG" />
-11-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:5:5-72
-11-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:5:22-69
+11-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:4:5-72
+11-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:4:22-69
 12    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-12-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:6:5-75
-12-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:6:22-72
+12-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:5:5-75
+12-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:5:22-72
 13    <uses-permission android:name="android.permission.INTERNET" />
-13-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:7:5-67
-13-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:7:22-64
+13-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:6:5-67
+13-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:6:22-64
 14    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-14-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:8:5-77
-14-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:8:22-74
-15
-16    <application
-16-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:10:5-29:19
-17        android:allowBackup="true"
-17-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:11:9-35
-18        android:debuggable="true"
-19        android:extractNativeLibs="false"
-20        android:icon="@android:drawable/sym_def_app_icon"
-20-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:12:9-58
-21        android:label="@string/app_name" >
-21-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:13:9-41
-22        <activity
-22-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:15:9-22:20
-23            android:name="com.devi.MainActivity"
-23-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:16:13-41
-24            android:exported="true" >
-24-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:17:13-36
-25            <intent-filter>
-25-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:18:13-21:29
-26                <action android:name="android.intent.action.MAIN" />
-26-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:19:17-69
-26-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:19:25-66
-27
-28                <category android:name="android.intent.category.LAUNCHER" />
-28-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:20:17-77
-28-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:20:27-74
-29            </intent-filter>
-30        </activity>
-31
-32        <service
-32-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:24:9-27:40
-33            android:name="com.devi.MonitorService"
+14-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:7:5-77
+14-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:7:22-74
+15    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+15-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:8:5-88
+15-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:8:22-85
+16    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+16-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:9:5-77
+16-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:9:22-74
+17    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+17-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:10:5-81
+17-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:10:22-78
+18    <uses-permission android:name="android.permission.WAKE_LOCK" />
+18-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:11:5-68
+18-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:11:22-65
+19    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+19-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:12:5-95
+19-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:12:22-92
+20    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+20-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:13:5-79
+20-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:13:22-76
+21
+22    <application
+22-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:15:5-48:19
+23        android:allowBackup="true"
+23-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:16:9-35
+24        android:debuggable="true"
+25        android:extractNativeLibs="false"
+26        android:icon="@android:drawable/sym_def_app_icon"
+26-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:17:9-58
+27        android:label="@string/app_name"
+27-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:18:9-41
+28        android:theme="@style/AppTheme"
+28-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:19:9-40
+29        android:usesCleartextTraffic="true" >
+29-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:20:9-44
+30        <activity
+30-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:22:9-30:20
+31            android:name="com.devi.MainActivity"
+31-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:23:13-41
+32            android:exported="true"
+32-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:24:13-36
+33            android:launchMode="singleTop" >
 33-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:25:13-43
-34            android:enabled="true"
-34-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:26:13-35
-35            android:exported="false" />
-35-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:27:13-37
-36    </application>
-37
-38</manifest>
+34            <intent-filter>
+34-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:26:13-29:29
+35                <action android:name="android.intent.action.MAIN" />
+35-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:27:17-69
+35-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:27:25-66
+36
+37                <category android:name="android.intent.category.LAUNCHER" />
+37-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:28:17-77
+37-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:28:27-74
+38            </intent-filter>
+39        </activity>
+40
+41        <service
+41-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:32:9-37:44
+42            android:name="com.devi.MonitorService"
+42-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:33:13-43
+43            android:enabled="true"
+43-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:34:13-35
+44            android:exported="false"
+44-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:35:13-37
+45            android:foregroundServiceType="phoneCall"
+45-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:36:13-54
+46            android:stopWithTask="false" />
+46-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:37:13-41
+47
+48        <receiver
+48-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:39:9-46:20
+49            android:name="com.devi.BootReceiver"
+49-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:40:13-41
+50            android:enabled="true"
+50-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:41:13-35
+51            android:exported="true" >
+51-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:42:13-36
+52            <intent-filter>
+52-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:43:13-45:29
+53                <action android:name="android.intent.action.BOOT_COMPLETED" />
+53-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:44:17-79
+53-->/home/krushn/devi-complete/android/app/src/main/AndroidManifest.xml:44:25-76
+54            </intent-filter>
+55        </receiver>
+56    </application>
+57
+58</manifest>
