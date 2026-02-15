@@ -10,16 +10,13 @@ export const twilioClient = twilio(
 
 export async function initiateCallback(callerNumber) {
   try {
-    const BASE_URL = process.env.BASE_URL;
-    
     const call = await twilioClient.calls.create({
       from: process.env.TWILIO_PHONE_NUMBER,
       to: callerNumber,
-      url: `${BASE_URL}/webhook/twilio-voice`,
-      statusCallback: `${BASE_URL}/webhook/twilio-voice`,
-      statusCallbackEvent: ['completed'],
-      statusCallbackMethod: 'POST',
-      timeout: 30,
+      url: `${process.env.BASE_URL}/webhook/twilio-voice`,
+      method: 'POST',
+      timeout: 60,
+      // CRITICAL: NO statusCallback - it's interfering
     });
     
     console.log('Callback initiated:', call.sid);

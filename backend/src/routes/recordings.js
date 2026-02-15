@@ -12,7 +12,8 @@ const twilioClient = twilio(
 );
 
 router.post('/complete', async (req, res) => {
-  console.log('Recording webhook:', req.body);
+  console.log('=== RECORDING WEBHOOK ===');
+  console.log(req.body);
   
   res.sendStatus(200);
   
@@ -20,9 +21,11 @@ router.post('/complete', async (req, res) => {
     const { RecordingSid, CallSid } = req.body;
     
     if (!RecordingSid) {
-      console.error('No RecordingSid received');
+      console.error('NO RecordingSid!');
       return;
     }
+    
+    console.log('Fetching recording:', RecordingSid);
     
     const recording = await twilioClient.recordings(RecordingSid).fetch();
     const publicUrl = `https://api.twilio.com${recording.uri.replace('.json', '.mp3')}`;
@@ -32,7 +35,9 @@ router.post('/complete', async (req, res) => {
     const call = await twilioClient.calls(CallSid).fetch();
     const callerNumber = call.from;
     
-    await twilioClient.messages.create({
+    console.log('Sending SMS to:', process.env.USER_PHONE_NUMBER);
+    
+    const message = await twilioClient.messages.create({
       body: `DEVI Missed Call
 From: ${callerNumber}
 Recording: ${publicUrl}`,
@@ -40,10 +45,11 @@ Recording: ${publicUrl}`,
       to: process.env.USER_PHONE_NUMBER,
     });
     
-    console.log('SMS sent successfully');
+    console.log('SMS SENT!', message.sid);
     
   } catch (error) {
-    console.error('Recording error:', error.message);
+    console.error('RECORDING ERROR:', error.message);
+    console.error(error.stack);
   }
 });
 
