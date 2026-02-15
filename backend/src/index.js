@@ -3,30 +3,39 @@ import dotenv from 'dotenv';
 import twilioVoiceRouter from './routes/twilioVoice.js';
 import missedCallRouter from './routes/missedCall.js';
 import recordingsRouter from './routes/recordings.js';
+import { initDatabase } from './db/supabase.js';
 
 dotenv.config();
 
-const app = express();
+const app  = express();
+const PORT = process.env.PORT || 3000;
+
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-
-/* ── Health (Android pings this to wake Render from sleep) ── */
+/* ── Health — Android pings this to wake Render from sleep ── */
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-/* ── Routes ── */
-app.post('/webhook/missed-call',   missedCallRouter);
-app.all('/webhook/twilio-voice',   twilioVoiceRouter);
-app.post('/webhook/recording/complete', recordingsRouter);
+/* ── Routes — paths must match URLs set in twilioService.js exactly ── */
 
-/* ── Fallback for unknown routes ── */
+// Android app → POST /webhook/missed-call
+app.use('/webhook/missed-call', missedCallRouter);
+
+// Twilio voice + status callback → /webhook/twilio-voice
+app.use('/webhook/twilio-voice', twilioVoiceRouter);
+
+// Twilio recording callback → /webhook/recording/complete
+app.use('/webhook/recording', recordingsRouter);
+
+/* ── 404 fallback ── */
 app.use((req, res) => {
-  res.status(404).json({ error: 'Not found' });
+  res.status(404).json({ error: 'Not found', path: req.path });
 });
 
-app.listen(PORT, () => {
+/* ── Start ── */
+app.listen(PORT, async () => {
   console.log(`DEVI backend running on port ${PORT}`);
+  await initDatabase();
 });

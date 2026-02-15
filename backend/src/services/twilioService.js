@@ -8,19 +8,24 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
-const FEMALE_VOICE = 'Polly.Aditi-Neural';
+// FIX: Polly.Aditi-Neural does NOT exist on Twilio — causes "application error"
+// Polly.Kajal is AWS Neural Hindi, best Indian female voice on Twilio
+const FEMALE_VOICE = 'Polly.Kajal';
 const LANGUAGE = 'hi-IN';
 
 export async function initiateCallback(callerNumber) {
   try {
+    const BASE_URL = process.env.BASE_URL;
+
     const call = await client.calls.create({
       from: process.env.TWILIO_PHONE_NUMBER,
       to: callerNumber,
-      url: `${process.env.BASE_URL}/webhook/twilio-voice`,
-      statusCallback: `${process.env.BASE_URL}/webhook/twilio-status`,
-      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+      // FIX: all 3 URLs now match routes mounted in index.js
+      url: `${BASE_URL}/webhook/twilio-voice`,
+      statusCallback: `${BASE_URL}/webhook/twilio-voice`,
+      statusCallbackEvent: ['completed'],
       record: true,
-      recordingStatusCallback: `${process.env.BASE_URL}/webhook/recording-complete`,
+      recordingStatusCallback: `${BASE_URL}/webhook/recording/complete`,
       recordingStatusCallbackEvent: ['completed'],
       timeout: 30,
       machineDetection: 'DetectMessageEnd'
@@ -65,7 +70,7 @@ export function generateRecordingResponse(action) {
   const response = new VoiceResponse();
   response.say(
     { voice: FEMALE_VOICE, language: LANGUAGE },
-    'Apna message record karne ke liye beep ke baad bolna shuru karein. Recording khatam karne ke liye chup ho jayein.'
+    'Apna sandesh record karne ke liye beep ke baad boliye. Khatam hone par chup ho jaiye.'
   );
   response.record({
     maxLength: 120,
