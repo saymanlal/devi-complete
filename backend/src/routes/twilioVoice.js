@@ -34,7 +34,7 @@ router.post('/', async (req, res) => {
   console.log('=== VOICE WEBHOOK ===', { 
     CallSid, 
     CallStatus, 
-    SpeechResult: !!SpeechResult, 
+    SpeechResult: SpeechResult || 'NONE',
     RecordingUrl: !!RecordingUrl,
     RecordingSid: RecordingSid || 'none'
   });
@@ -58,6 +58,7 @@ router.post('/', async (req, res) => {
     }
 
     const state = conversationState.get(CallSid);
+    console.log('Current stage:', state.stage);
 
     if (state.stage === 'greeting') {
       state.stage = 'conversation';
@@ -69,7 +70,7 @@ router.post('/', async (req, res) => {
 
     // CRITICAL: Handle recording completion
     if (RecordingUrl && RecordingSid) {
-      console.log('=== RECORDING DETECTED IN VOICE WEBHOOK ===');
+      console.log('🎙️ RECORDING DETECTED!');
       console.log('RecordingSid:', RecordingSid);
       console.log('RecordingUrl:', RecordingUrl);
       
@@ -81,21 +82,20 @@ router.post('/', async (req, res) => {
       return res.type('text/xml').send(response.toString());
     }
 
-    if (state.stage === 'recording' && RecordingUrl) {
-      state.voiceMessageUrl = RecordingUrl + '.mp3';
-      await updateCall(CallSid, { voice_message_url: state.voiceMessageUrl }).catch(() => {});
-      sayAndHangup(response, 'Aapka sandesh record ho gaya hai. Simon Sir jaise hi available honge, sun lenge. Dhanyawaad. Namaste.');
-      conversationState.delete(CallSid);
-      return res.type('text/xml').send(response.toString());
-    }
-
     if (state.stage === 'awaiting_message_yn') {
       if (SpeechResult) {
+        console.log('💬 User said:', SpeechResult);
         const lower = SpeechResult.toLowerCase();
-        const agreed = /haan|yes|ha |zaroor|bilkul|okay|thik|sure|chhod|bolta|record|message/.test(lower);
-        if (agreed) {
+        
+        // MORE FLEXIBLE MATCHING - if user says ANYTHING, assume yes!
+        const agreed = /haan|yes|ha|zaroor|bilkul|ok|okay|thik|sure|chhod|chod|bolta|record|message|ji/i.test(lower);
+        
+        console.log('Agreed to record?', agreed);
+        
+        if (agreed || lower.length > 2) {  // ANY response = assume yes!
           state.stage = 'recording';
-          console.log('=== STARTING RECORDING ===');
+          console.log('🎙️🎙️🎙️ STARTING RECORDING NOW! 🎙️🎙️🎙️');
+          
           response.say({ voice: VOICE, language: LANGUAGE }, 'Bilkul. Beep ke baad apna sandesh boliye.');
           response.record({
             maxLength: 120,
@@ -107,6 +107,8 @@ router.post('/', async (req, res) => {
             recordingStatusCallback: `${process.env.BASE_URL}/webhook/recording/complete`,
             recordingStatusCallbackMethod: 'POST',
           });
+          
+          console.log('Recording TwiML sent!');
           return res.type('text/xml').send(response.toString());
         } else {
           state.stage = 'closing';
@@ -119,10 +121,11 @@ router.post('/', async (req, res) => {
     if (state.stage === 'closing') {
       if (SpeechResult) {
         const lower = SpeechResult.toLowerCase();
-        const wantsMore = /haan|yes|message|chhod|bolta|aur|kuch|batana/.test(lower);
-        if (wantsMore) {
+        const wantsMore = /haan|yes|message|chhod|bolta|aur|kuch|batana|ji/i.test(lower);
+        if (wantsMore || lower.length > 2) {
           state.stage = 'recording';
-          console.log('=== STARTING RECORDING (from closing) ===');
+          console.log('🎙️🎙️🎙️ STARTING RECORDING (from closing)! 🎙️🎙️🎙️');
+          
           response.say({ voice: VOICE, language: LANGUAGE }, 'Zaroor. Beep ke baad boliye.');
           response.record({
             maxLength: 120,
@@ -143,6 +146,7 @@ router.post('/', async (req, res) => {
     }
 
     if (SpeechResult) {
+      console.log('User speech detected:', SpeechResult);
       const langStyle = detectLanguageMix(SpeechResult);
       state.languageStyle = langStyle;
       state.history.push({ role: 'user', content: SpeechResult });
@@ -152,9 +156,12 @@ router.post('/', async (req, res) => {
       state.history.push({ role: 'assistant', content: aiResponse });
 
       const userTurns = state.history.filter(m => m.role === 'user').length;
+      console.log('User turns so far:', userTurns);
+      
       if (userTurns >= 3 && !state.messageOffered) {
         state.messageOffered = true;
         state.stage = 'awaiting_message_yn';
+        console.log('✅ Offering voice message option');
         const withOffer = `${aiResponse} ${MESSAGE_PROMPT_MID}`;
         sayAndGather(response, withOffer, ACTION);
         return res.type('text/xml').send(response.toString());
@@ -167,6 +174,7 @@ router.post('/', async (req, res) => {
     if (!state.messageOffered) {
       state.messageOffered = true;
       state.stage = 'awaiting_message_yn';
+      console.log('No speech, offering message option');
       sayAndGather(response, MESSAGE_PROMPT_MID, ACTION);
       return res.type('text/xml').send(response.toString());
     }
@@ -176,7 +184,7 @@ router.post('/', async (req, res) => {
     return res.type('text/xml').send(response.toString());
 
   } catch (error) {
-    console.error('Voice webhook error:', error.message, error.stack);
+    console.error('❌ Voice webhook error:', error.message, error.stack);
     sayAndHangup(response, 'Kshama karein, thodi technical sa-mas-ya aa gayi. Simon Sir jaldi aapko call karenge. Namaste.');
     return res.type('text/xml').send(response.toString());
   }

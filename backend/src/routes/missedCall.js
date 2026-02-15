@@ -7,6 +7,9 @@ import { log } from '../utils/logger.js';
 const router = express.Router();
 const recentCallbacks = new Map();
 
+// Helper function for delay
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 router.post('/', async (req, res) => {
   try {
     const { caller, timestamp } = req.body;
@@ -29,6 +32,11 @@ router.post('/', async (req, res) => {
     recentCallbacks.set(sanitizedCaller, now);
     log('info', 'Missed call received', { caller: sanitizedCaller });
     
+    // WAIT 10 SECONDS BEFORE CALLING BACK
+    console.log('⏳ Waiting 10 seconds before callback...');
+    await delay(10000);
+    console.log('✅ 10 seconds passed, initiating callback now');
+    
     const callSid = await initiateCallback(sanitizedCaller);
     
     await saveCall({
@@ -41,7 +49,7 @@ router.post('/', async (req, res) => {
     res.json({
       success: true,
       callSid,
-      message: 'DEVI callback initiated'
+      message: 'DEVI callback initiated after 10s delay'
     });
     
   } catch (error) {
